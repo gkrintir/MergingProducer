@@ -48,6 +48,8 @@
 //#include <DataFormats/VertexReco/interface/VertexFwd.h>
 //#include <DataFormats/TrackReco/interface/Track.h>
 //#include <DataFormats/TrackReco/interface/TrackFwd.h>
+#include "Analyzers/CmsTwoPartCorrAnalysis/interface/cent_PbPb_2022.h"
+#include "DataFormats/CaloTowers/interface/CaloTowerCollection.h"
 
 //
 // class declaration
@@ -74,6 +76,7 @@ class generalAndHiPixelTracks : public edm::stream::EDProducer<> {
 
       edm::EDGetTokenT<reco::VertexCollection> vertexSrc_;
       edm::EDGetTokenT<int> centralitySrc_;
+      edm::EDGetTokenT<CaloTowerCollection> towers_;
       edm::EDGetTokenT<std::vector<float>> mvaSrc_;
 
       double cutWidth_;
@@ -120,6 +123,7 @@ generalAndHiPixelTracks::generalAndHiPixelTracks(const edm::ParameterSet& iConfi
  pixTrackSrc_(consumes<reco::TrackCollection>(iConfig.getParameter<edm::InputTag>("pixTrackSrc"))),
  vertexSrc_(consumes<reco::VertexCollection>(iConfig.getParameter<edm::InputTag>("vertexSrc"))),
  centralitySrc_(consumes<int>(iConfig.getParameter<edm::InputTag>("centralitySrc"))),
+ towers_(consumes<CaloTowerCollection>(iConfig.getParameter<edm::InputTag>("caloTower"))),
  mvaSrc_(consumes<std::vector<float>>(iConfig.getParameter<edm::InputTag>("mvaSrc"))),
  cutWidth_(iConfig.getParameter<double>("cutWidth")),
  trkRes_(iConfig.getParameter<double>("trkRes")),
@@ -178,10 +182,42 @@ generalAndHiPixelTracks::produce(edm::Event& iEvent, const edm::EventSetup& iSet
   iEvent.getByToken(mvaSrc_, mvaoutput);
 
 
-  int occ=10, cbin=0;
+  int occ=10, cbin=0;/*
   edm::Handle<int> centralityBin;
   iEvent.getByToken(centralitySrc_, centralityBin);
   cbin = *centralityBin;
+  occ = cbin;*/
+
+  double etHFtowerSumPlus=0;
+  double etHFtowerSumMinus=0;
+  double etHFtowerSum=0;
+  int poshf = 0;
+  int neghf = 0;
+  edm::Handle<CaloTowerCollection> towers;
+  iEvent.getByToken(towers_,towers);
+  for( size_t i = 0; i<towers->size(); ++ i){
+    const CaloTower & tower = (*towers)[ i ];
+    double zs = tower.zside();
+    bool isHF = tower.ietaAbs() > 29;
+    if(isHF && zs > 0)
+      {
+	etHFtowerSumPlus += tower.pt();
+	if(tower.energy()>4.)
+	  {
+	    poshf++;
+	  }
+      }
+    if(isHF && zs < 0)
+      {
+	etHFtowerSumMinus += tower.pt();
+	if(tower.energy()>4.)
+	  {
+	    neghf++;
+	  }
+      }
+  }
+  etHFtowerSum=etHFtowerSumPlus + etHFtowerSumMinus;
+  cbin = getHiBinFromhiHF(etHFtowerSum);
   occ = cbin;
 
   double ptCut = 0.6;
